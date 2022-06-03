@@ -109,7 +109,7 @@ class PanAuthor:
         self.id = id
         if affiliations:
             self.affiliations = affiliations
-        if firstname!=None and  firstname!='':
+        if firstname not in [None, '']:
             self.fullname+=', '+self.firstname
 
 class PanEvent:
@@ -162,26 +162,11 @@ class PanEvent:
     def __init__(self, label, latitude=None, longitude=None, latitude2=None, longitude2=None, elevation=None, datetime=None, datetime2=None, device=None, basis=None, location=None, campaign=None, id = None, deviceid = None):
         self.label = label
         self.id = id
-        if latitude !=None:
-            self.latitude=float(latitude)
-        else:
-            self.latitude=None
-        if longitude !=None:
-            self.longitude=float(longitude)
-        else:
-            self.longitude=None
-        if latitude2 !=None:
-            self.latitude2=float(latitude2)
-        else:
-            self.latitude2=None
-        if longitude2 !=None:
-            self.longitude2=float(longitude2)
-        else:
-            self.longitude2=None
-        if elevation !=None:
-            self.elevation=float(elevation)
-        else:
-            self.elevation=None
+        self.latitude = float(latitude) if latitude !=None else None
+        self.longitude = float(longitude) if longitude !=None else None
+        self.latitude2 = float(latitude2) if latitude2 !=None else None
+        self.longitude2 = float(longitude2) if longitude2 !=None else None
+        self.elevation = float(elevation) if elevation !=None else None
         self.device = device
         self.deviceid = deviceid
         self.basis = basis
@@ -422,14 +407,14 @@ class PanDataSet:
         self.logging = []
         ### The constructor allows the initialisation of a PANGAEA dataset object either by using an integer dataset id or a DOI
         self.setID(id)
-        self.ns= {'md':'http://www.pangaea.de/MetaData'}        
+        self.ns= {'md':'http://www.pangaea.de/MetaData'}
         # Mapping should be moved to e.g netCDF class/module??
         #moddir = os.path.dirname(os.path.abspath(__file__))
         #self.CFmapping=pd.read_csv(moddir+'\\PANGAEA_CF_mapping.txt',delimiter='\t',index_col='ID')
         self.cache=enable_cache
         self.uri = self.doi = '' #the doi
         self.isParent=False
-        self.params=dict()
+        self.params = {}
         self.parameters = self.params
         self.defaultparams=['Latitude','Longitude','Event','Elevation','Date/Time']
         self.paramlist=paramlist
@@ -460,7 +445,7 @@ class PanDataSet:
         #replacing error list
 
         self.loginstatus='unrestricted'
-        self.allowNetCDF=True        
+        self.allowNetCDF=True
         self.eventInMatrix=False
         self.deleteFlag=deleteFlag
         self.children=[]
@@ -477,7 +462,15 @@ class PanDataSet:
 
         self.quality_flags={'ok':'valid','?':'questionable','/':'not_valid','*':'unknown'}
         self.quality_flag_replace={'ok':0,'?':1,'/':2,'*':3}
-        if self.id != None:
+        if self.id is None:
+            self.logging.append(
+                {
+                    'ERROR': f'Dataset id missing, could not initialize PanDataSet object for: {str(id)}'
+                }
+            )
+
+
+        else:
             gotData=False
             #setting up the chache directory in the users home folder
             homedir = os.path.expanduser("~")
@@ -495,23 +488,27 @@ class PanDataSet:
             else:
                 #delete existing cache
                 self.drop_pickle()
-            if not gotData:        
+            if not gotData:
                 #print('trying to load data and metadata from PANGAEA')
                 # check if title is already there, otherwise load metadata
                 if not self.title:
                     self.setMetadata()
-                if self.loginstatus=='unrestricted' and self.isParent!=True:
+                if self.loginstatus == 'unrestricted' and not self.isParent:
                     self.setData()
-                    self.defaultparams = [s for s in self.defaultparams if s in self.params.keys()]
-                    if self.paramlist!=None:
-                        if  len(self.paramlist)!=len(self.paramlist_index):
-                            self.logging.append({'WARNING':'Inconsistent number of detected parameters, expected: '+str(len(self.paramlist))+' vs '+str(len(self.paramlist_index))})
+                    self.defaultparams = [s for s in self.defaultparams if s in self.params]
+                    if self.paramlist != None and len(self.paramlist) != len(
+                        self.paramlist_index
+                    ):
+                        self.logging.append(
+                            {
+                                'WARNING': f'Inconsistent number of detected parameters, expected: {len(self.paramlist)} vs {len(self.paramlist_index)}'
+                            }
+                        )
+
                     if self.cache==True:
                         self.to_pickle()
                 else:
                     self.logging.append({'WARNING':'Dataset is either restricted or of type "parent"'})
-        else:
-            self.logging.append({'ERROR':'Dataset id missing, could not initialize PanDataSet object for: '+str(id)})
 
     def get_pickle_path(self):
         dirs = textwrap.wrap(str(self.id).zfill(8), 2)
@@ -520,7 +517,7 @@ class PanDataSet:
             os.makedirs(dirpath)
         except Exception as e:
             pass
-        return os.path.join(dirpath , str(self.id) + '_data.pik')
+        return os.path.join(dirpath, f'{str(self.id)}_data.pik')
 
     def check_pickle(self, expirydays = 1):
         '''
@@ -553,7 +550,6 @@ class PanDataSet:
                 except Exception as e:
                     print(e)
                     ret = False
-                    pass
             return ret
 
     def drop_pickle(self):
@@ -569,12 +565,16 @@ class PanDataSet:
         pickle_path = self.get_pickle_path()
         if os.path.exists(pickle_path):
             try:
-                f = open(pickle_path, 'rb')
-                tmp_dict = pickle.load(f)
-                tmp_dict['logging'] = []
-                f.close()         
+                with open(pickle_path, 'rb') as f:
+                    tmp_dict = pickle.load(f)
+                    tmp_dict['logging'] = []
                 self.__dict__.update(tmp_dict)
-                self.logging.append({'INFO':'Loading data and metadata from cache: '+str(pickle_path)})
+                self.logging.append(
+                    {
+                        'INFO': f'Loading data and metadata from cache: {str(pickle_path)}'
+                    }
+                )
+
                 ret=True
             except:
                 self.logging.append({'WARNING':'Loading data and metadata from cache failed'})
@@ -589,13 +589,16 @@ class PanDataSet:
 
         """
 
-        f = open(self.get_pickle_path(), 'wb')
-        pickle.dump(self.__dict__, f, 2)
-        self.logging.append({'INFO': 'Saved cache (pickle) file at: ' + str(self.get_pickle_path())})
-        f.close()
+        with open(self.get_pickle_path(), 'wb') as f:
+            pickle.dump(self.__dict__, f, 2)
+            self.logging.append(
+                {
+                    'INFO': f'Saved cache (pickle) file at: {str(self.get_pickle_path())}'
+                }
+            )
         
     
-    def setID (self, id):
+    def setID(self, id):
         """
         Initialize the ID of a data set in case it was not defined in the constructur
         Parameters
@@ -610,17 +613,16 @@ class PanDataSet:
             if idmatch is not None:
                 self.id = idmatch[1]
             else:
-                self.logging.append({'ERROR': 'Invalid Identifier or DOI: '+str(id)})
+                self.logging.append({'ERROR': f'Invalid Identifier or DOI: {str(id)}'})
                 #print('Invalid Identifier')
 
 
     def _getIDParts(self, idstr):
         #returns dict extracted from panmd id strings e.g
         #col13.ds10866878.param7387
-        ret = dict()
+        ret = {}
         if isinstance(idstr, str):
-            idmatches = re.findall(r"([a-z]+)([0-9]+)", idstr)
-            if idmatches:
+            if idmatches := re.findall(r"([a-z]+)([0-9]+)", idstr):
                 ret = dict(idmatches)
         return ret
     
@@ -659,28 +661,33 @@ class PanDataSet:
             if event.find('md:method/md:name',self.ns)!=None:
                 eventDevice= event.find('md:method/md:name',self.ns).text
                 eventDeviceID = self._getIDParts(event.find('md:method',self.ns).get('id')).get('method')
-            if event.find('md:basis',self.ns)!=None:
-                basis= event.find('md:basis',self.ns)
-                if basis.find('md:name',self.ns)!=None:
-                    basis_name= basis.find('md:name',self.ns).text
-                else:
-                    basis_name=None
-                if basis.find('md:URI',self.ns)!=None:
-                    basis_URI= basis.find('md:URI',self.ns).text
-                else:
-                    basis_URI=None
-                if basis.find('md:callSign',self.ns)!=None:
-                    basis_callsign= basis.find('md:callSign',self.ns).text
-                else:
-                    basis_callsign=None
-                if basis.find('md:IMOnumber',self.ns)!=None:
-                    basis_imonumber= basis.find('md:IMOnumber',self.ns).text
-                else:
-                    basis_imonumber=None
-                eventBasis=PanBasis(basis_name,basis_URI,basis_callsign,basis_imonumber)
-            else:
+            if event.find('md:basis', self.ns) is None:
                 eventBasis=None
-            if event.find("md:campaign", self.ns)!=None:
+            else:
+                basis= event.find('md:basis',self.ns)
+                basis_name = (
+                    basis.find('md:name', self.ns).text
+                    if basis.find('md:name', self.ns) != None
+                    else None
+                )
+
+                if basis.find('md:URI', self.ns) is None:
+                    basis_URI=None
+                else:
+                    basis_URI= basis.find('md:URI',self.ns).text
+                if basis.find('md:callSign', self.ns) is None:
+                    basis_callsign=None
+                else:
+                    basis_callsign= basis.find('md:callSign',self.ns).text
+                if basis.find('md:IMOnumber', self.ns) is None:
+                    basis_imonumber=None
+                else:
+                    basis_imonumber= basis.find('md:IMOnumber',self.ns).text
+                eventBasis=PanBasis(basis_name,basis_URI,basis_callsign,basis_imonumber)
+            if event.find("md:campaign", self.ns) is None:
+                eventCampaign=None
+
+            else:
                 campaign=event.find("md:campaign", self.ns)
                 if campaign.find('md:name',self.ns)!=None:
                     campaign_name= campaign.find('md:name',self.ns).text
@@ -696,14 +703,18 @@ class PanDataSet:
                     endlocation= campaign.find('md:attribute[@name="End location"]',self.ns).text
                 if campaign.find('md:attribute[@name="BSH ID"]',self.ns)!=None:
                     BSHID= campaign.find('md:attribute[@name="BSH ID"]',self.ns).text
-                if campaign.find('md:attribute[@name="Expedition Program"]',self.ns)!=None:
-                    expeditionprogram= campaign.find('md:attribute[@name="Expedition Program"]',self.ns).text
-                else:
-                    expeditionprogram=None
-                eventCampaign=PanCampaign(campaign_name,campaign_URI,campaign_start,campaign_end,startlocation,endlocation,BSHID,expeditionprogram)
-            else:
-                eventCampaign=None
+                expeditionprogram = (
+                    campaign.find(
+                        'md:attribute[@name="Expedition Program"]', self.ns
+                    ).text
+                    if campaign.find(
+                        'md:attribute[@name="Expedition Program"]', self.ns
+                    )
+                    != None
+                    else None
+                )
 
+                eventCampaign=PanCampaign(campaign_name,campaign_URI,campaign_start,campaign_end,startlocation,endlocation,BSHID,expeditionprogram)
             self.events.append(PanEvent(eventLabel, 
                                         eventLatitude, 
                                         eventLongitude,

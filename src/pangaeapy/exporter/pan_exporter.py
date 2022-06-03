@@ -5,7 +5,7 @@ class PanExporter:
     def __init__(self, pandataset, filelocation=None):
         self.module_dir = os.path.dirname(os.path.dirname(__file__))
         self.pandataset=pandataset
-        if filelocation == None:
+        if filelocation is None:
             self.filelocation =os.path.join(expanduser("~"),'pangaeapy_export')
             try:
                 os.makedirs(self.filelocation)
