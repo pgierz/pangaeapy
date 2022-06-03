@@ -46,21 +46,17 @@ class PanDarwinCoreAchiveExporter(PanExporter):
         return ret
 
     def check_unit(self, unitexpr):
-        unitre = '^([#%])(?:\/((?:[0-9]+\s)?(?:[kdcm]?m{1,2}\*{2}[23]|m?l|k?g)))?(?:\/(d|m|y|a|ka|day|week|month|year){1})?$'
         dimension = ''
         istaxonrelated = False
         if unitexpr:
             if isinstance(unitexpr, str):
+                unitre = '^([#%])(?:\/((?:[0-9]+\s)?(?:[kdcm]?m{1,2}\*{2}[23]|m?l|k?g)))?(?:\/(d|m|y|a|ka|day|week|month|year){1})?$'
                 try:
-                    umatch = re.search(unitre, unitexpr)
-                    if umatch:
+                    if umatch := re.search(unitre, unitexpr):
                         uparts = filter(None, list(umatch.groups()))
                         if umatch[1] is not None:
                             istaxonrelated = True
-                            if umatch[1] == '#':
-                                dimension = 'individuals'
-                            else:
-                                dimension = 'percentage'
+                            dimension = 'individuals' if umatch[1] == '#' else 'percentage'
                             if umatch[2] is not None:
                                 if 'l' in umatch[2] or '**3' in umatch[2]:
                                     dimension += ' per volume'
@@ -69,12 +65,9 @@ class PanDarwinCoreAchiveExporter(PanExporter):
                                 else:
                                     dimension += ' per area'
                             if umatch[3] is not None:
-                                if umatch[2] is not None:
-                                    dimension += ' and time'
-                                else:
-                                    dimension += ' per time'
+                                dimension += ' and time' if umatch[2] is not None else ' per time'
                 except Exception as e:
-                    self.logging.append({'WARNING': 'Unit check failed: '+str(e)})
+                    self.logging.append({'WARNING': f'Unit check failed: {str(e)}'})
         else:
             dimension = 'relative abundance'
             istaxonrelated =True
@@ -82,7 +75,10 @@ class PanDarwinCoreAchiveExporter(PanExporter):
 
     def get_taxon_columns(self):
         taxoncolumns = OrderedDict()
-        taxon_attr_regex = r'(.*?)((?:,\s?)'+str('|(?:,\s?)'.join(self.taxon_attributes))+')$'
+        taxon_attr_regex = (
+            r'(.*?)((?:,\s?)' + '|(?:,\s?)'.join(self.taxon_attributes) + ')$'
+        )
+
         for pkey, param in self.pandataset.params.items():
             # full match of taxon name with parameter only
             # TODO: extend to some adjectives e.g. juvenile, adult etc..
@@ -92,10 +88,12 @@ class PanDarwinCoreAchiveExporter(PanExporter):
                     taxon_candidate = str(param.name)
 
                     taxon_attribute = None
-                    if len(name_parts) == 2:
-                        if name_parts[1] in self.taxon_attributes:
-                            taxon_candidate = name_parts[0]
-                            taxon_attribute = name_parts[1]
+                    if (
+                        len(name_parts) == 2
+                        and name_parts[1] in self.taxon_attributes
+                    ):
+                        taxon_candidate = name_parts[0]
+                        taxon_attribute = name_parts[1]
                     if taxon_candidate in self.known_synonyms:
                         taxon_candidate = self.known_synonyms.get(taxon_candidate)
 
@@ -110,29 +108,38 @@ class PanDarwinCoreAchiveExporter(PanExporter):
                     if taxon_candidate.endswith(' spp.'):
                         test_taxon  = taxon_candidate.replace(' spp.','').strip()
 
-                    if test_taxon .lower() == str(term.get('name')).lower() and is_valid_unit:
-                        if term.get('classification'):
-                            if 'Biological Classification' in term.get('classification'):
-                                kingdom = list({'Animalia', 'Archaea', 'Bacteria', 'Chromista', 'Fungi', 'Plantae', 'Protozoa',
-                                                'Viruses'} & set(term.get('classification')))[0]
-                                if kingdom not in self.taxonomic_coverage:
-                                    self.taxonomic_coverage.append(kingdom)
+                    if (
+                        test_taxon.lower() == str(term.get('name')).lower()
+                        and is_valid_unit
+                        and term.get('classification')
+                        and 'Biological Classification'
+                        in term.get('classification')
+                    ):
+                        kingdom = list({'Animalia', 'Archaea', 'Bacteria', 'Chromista', 'Fungi', 'Plantae', 'Protozoa',
+                                        'Viruses'} & set(term.get('classification')))[0]
+                        if kingdom not in self.taxonomic_coverage:
+                            self.taxonomic_coverage.append(kingdom)
 
-                                taxoncolumns[pkey] = {'taxon': taxon_candidate, 'series': param.dataseries, 'author': param.PI,
-                                                      'kingdom': kingdom, 'colno': param.colno, 'unit': param.unit,'dimension': dimension}
-                                if taxon_attribute:
-                                    if taxon_attribute in self.taxon_sex:
-                                        taxoncolumns[pkey]['sex'] = taxon_attribute
-                                        if 'sex' not in self.dwcfields:
-                                            self.dwcfields.append('sex')
-                                    if taxon_attribute in self.taxon_lifestages:
-                                        taxoncolumns[pkey]['lifestage'] = taxon_attribute
-                                        if 'lifeStage' not in self.dwcfields:
-                                            self.dwcfields.append('lifeStage')
+                        taxoncolumns[pkey] = {'taxon': taxon_candidate, 'series': param.dataseries, 'author': param.PI,
+                                              'kingdom': kingdom, 'colno': param.colno, 'unit': param.unit,'dimension': dimension}
+                        if taxon_attribute:
+                            if taxon_attribute in self.taxon_sex:
+                                taxoncolumns[pkey]['sex'] = taxon_attribute
+                                if 'sex' not in self.dwcfields:
+                                    self.dwcfields.append('sex')
+                            if taxon_attribute in self.taxon_lifestages:
+                                taxoncolumns[pkey]['lifestage'] = taxon_attribute
+                                if 'lifeStage' not in self.dwcfields:
+                                    self.dwcfields.append('lifeStage')
                     break
 
             except Exception as e:
-                self.logging.append({'WARNING': 'Failed to identify taxonomic information in parameter: '+str(pkey)})
+                self.logging.append(
+                    {
+                        'WARNING': f'Failed to identify taxonomic information in parameter: {str(pkey)}'
+                    }
+                )
+
         if len(taxoncolumns) <= 0:
             self.logging.append({'WARNING': 'Could not identify taxonomic information in this dataset'})
         return taxoncolumns
@@ -148,7 +155,7 @@ class PanDarwinCoreAchiveExporter(PanExporter):
                     if int(param.id) in geocontext_params:
                         #basisofrecord = 'FossilSpecimen'
                         geologicalcontextid = 'http://purl.obolibrary.org/obo/ENVO_00002164'
-                    if int(param.id) in [1]:
+                    if int(param.id) in {1}:
                         #basisofrecord = 'FossilSpecimen'
                         geologicalcontextid = 'http://purl.obolibrary.org/obo/ENVO_00002007'
         except Exception as e:
@@ -159,11 +166,11 @@ class PanDarwinCoreAchiveExporter(PanExporter):
     def get_dwca_data(self, taxoncolumns):
         dwcdata = None
         basisofrecord, geologicalcontextid = self.get_context_info()
-        selectedcolumns = []
         geocolumns = self.pandataset.defaultparams
         if 'Depth water' in self.pandataset.data.columns:
             geocolumns.append('Depth water')
         if len(taxoncolumns) > 0:
+            selectedcolumns = []
             selectedcolumns.extend(geocolumns)
             selectedcolumns.extend(taxoncolumns.keys())
             taxonframe = self.pandataset.data[selectedcolumns]
@@ -178,7 +185,7 @@ class PanDarwinCoreAchiveExporter(PanExporter):
             taxonframe['modified'] = self.pandataset.lastupdate
             taxonframe['institutionCode'] = 'Pangaea'
             doimatch = re.search('(10\.1594/PANGAEA\.[0-9]+)', self.pandataset.doi)
-            taxonframe['CollectionCode'] = 'doi:' + str(doimatch[1])
+            taxonframe['CollectionCode'] = f'doi:{str(doimatch[1])}'
             taxonframe['datasetID'] = self.pandataset.doi
             taxonframe['basisOfRecord'] = basisofrecord
             taxonframe['catalogNumber'] = taxonframe['Colname'].apply(
@@ -228,7 +235,7 @@ class PanDarwinCoreAchiveExporter(PanExporter):
         try:
             for col in self.dwcfields:
                 if col != 'id':
-                    if str(col) in ['modified']:
+                    if str(col) in {'modified'}:
                         xml += '<field index="'+str(index)+'" term="http://purl.org/dc/terms/' + str(col) + '" />'
                     else:
                         xml += '<field index="'+str(index)+'" term="http://rs.tdwg.org/dwc/terms/'+str(col)+'" />'
@@ -264,7 +271,12 @@ class PanDarwinCoreAchiveExporter(PanExporter):
                 #coverage.append(lxml.Element('taxonomicCoverage'))
                 ret= et.tostring(emlxml, pretty_print=True)
             except Exception as e:
-                self.logging.append({'ERROR': 'Failed to perform XSLT transformation to EML: '+str(e)})
+                self.logging.append(
+                    {
+                        'ERROR': f'Failed to perform XSLT transformation to EML: {str(e)}'
+                    }
+                )
+
         else:
             self.logging.append({'ERROR': 'Failed to perform XSLT transformation to EML, missing panmd XML'})
         return ret
@@ -277,7 +289,7 @@ class PanDarwinCoreAchiveExporter(PanExporter):
                 if len(datacolumns) > 0:
                     ret = True
             except Exception as e:
-                self.logging.append({'ERROR':'DwC-A verification failed: '+str(e)})
+                self.logging.append({'ERROR': f'DwC-A verification failed: {str(e)}'})
 
         return ret
 
@@ -289,19 +301,19 @@ class PanDarwinCoreAchiveExporter(PanExporter):
                 data = self.get_dwca_data(datacolumns)
                 meta = self.get_meta_xml()
                 eml = self.get_eml_xml()
-                if not any('ERROR' in lg for lg in self.logging):
+                if all('ERROR' not in lg for lg in self.logging):
                     in_memory_zip = BytesIO()
                     zip_file = ZipFile(in_memory_zip, 'w')
                     zip_file.writestr('meta.xml', meta)
                     zip_file.writestr('eml.xml', eml)
-                    zip_file.writestr(self.pandataset.id+'_data.tab', data)
+                    zip_file.writestr(f'{self.pandataset.id}_data.tab', data)
                     zip_file.close()
                     in_memory_zip.seek(0)
                     self.file = in_memory_zip
                 else:
                     self.logging.append({'ERROR': 'DwC-A Zip file creation failed due to previous errors '})
             except Exception as e:
-                self.logging.append({'ERROR':'DwC-A Zip file creation failed: '+str(e)})
+                self.logging.append({'ERROR': f'DwC-A Zip file creation failed: {str(e)}'})
         else:
             self.logging.append({'ERROR': 'Not PanDataSet object available to perform the DwC-A export'})
 
@@ -310,14 +322,23 @@ class PanDarwinCoreAchiveExporter(PanExporter):
     def save(self):
         if isinstance(self.file, BytesIO):
             try:
-                with open(os.path.join(self.filelocation,str('dwca_pangaea_'+str(self.pandataset.id)+'.zip')),'wb') as f:
+                with open(os.path.join(self.filelocation, str(f'dwca_pangaea_{str(self.pandataset.id)}.zip')), 'wb') as f:
                     #print(f.name)
                     f.write(self.file.getbuffer())
                     f.close()
-                    self.logging.append({'INFO': 'Saved DwC-A Zip: ' + os.path.join(self.filelocation,str('dwca_pangaea_'+str(self.pandataset.id)+'.zip'))})
+                    self.logging.append(
+                        {
+                            'INFO': 'Saved DwC-A Zip: '
+                            + os.path.join(
+                                self.filelocation,
+                                str(f'dwca_pangaea_{str(self.pandataset.id)}.zip'),
+                            )
+                        }
+                    )
+
                     return True
             except Exception as e:
-                self.logging.append({'ERROR': 'Could not save, DwC-A Zip: '+str(e)})
+                self.logging.append({'ERROR': f'Could not save, DwC-A Zip: {str(e)}'})
         else:
             self.logging.append({'ERROR':'Could not save, DwC-A Zip file is not a BytesIO'})
             return False

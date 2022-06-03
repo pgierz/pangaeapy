@@ -26,7 +26,7 @@ class PanNetCDFExporter(PanExporter):
         filename = f.f_code.co_filename
         linecache.checkcache(filename)
         line = linecache.getline(filename, lineno, f.f_globals)
-        print('EXCEPTION IN ({}, LINE {} "{}"): {}'.format(filename, lineno, line.strip(), exc_obj))
+        print(f'EXCEPTION IN ({filename}, LINE {lineno} "{line.strip()}"): {exc_obj}')
     
     def setMainVariables(self):
         #self.time_units = 'hours since 2000-01-01 00:00:00.0'
@@ -36,14 +36,16 @@ class PanNetCDFExporter(PanExporter):
             self.netcdf.id=self.pandataset.doi
             if self.pandataset.topotype=='time series':
                 self.netcdf.featureType='timeSeries'
-            elif self.pandataset.topotype=='profile series' or self.pandataset.topotype=='vertical profile':
+            elif self.pandataset.topotype in ['profile series', 'vertical profile']:
                 self.netcdf.featureType='profile'
             #nc.platform_code='DBBH'
            # nc.featureType=self.pandataset.getGeometry()
             self.netcdf.principal_investigator=self.pandataset.authors[0].fullname
             self.netcdf.date_update=self.pandataset.date+'+02:00'
         except Exception as e:
-            self.logging.append({'ERROR': 'NetCDF main variables creation failed '+str(e)})
+            self.logging.append(
+                {'ERROR': f'NetCDF main variables creation failed {str(e)}'}
+            )
             #print('NetCDF main variables creation failed '+str(e))
                       
     def setParameterSynonyms(self, mappingfile=['mappings','pan_mappings.json']):

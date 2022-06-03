@@ -35,7 +35,7 @@ class PanQuery:
         self.query = query
         self.result = self._search(self.query, bbox, limit, offset)
         if self.error is not None:
-            print('ERROR: '+self.error)
+            print(f'ERROR: {self.error}')
 
 
     def _search(self,query, bbox =(), limit=10, offset=0):
@@ -49,11 +49,12 @@ class PanQuery:
         try:
             if len(bbox) ==4:
                 minlon, minlat,  maxlon, maxlat, = bbox
-                panquery += '&maxlat='+str(maxlat)+'&minlon='+str(minlon)+'&maxlon='+str(maxlon)+'&minlat='+str(minlat)
+                panquery += f'&maxlat={str(maxlat)}&minlon={str(minlon)}&maxlon={str(maxlon)}&minlat={str(minlat)}'
+
             if offset != 0:
-                panquery +='&offset='+str(offset)
+                panquery += f'&offset={str(offset)}'
             if limit !=10:
-                panquery+='&count='+str(limit)
+                panquery += f'&count={str(limit)}'
 
             r = requests.get(panquery)
             res = r.json()
@@ -71,7 +72,7 @@ class PanQuery:
             elif r.status_code == 500:
                 self.error = res.get('error')
             else:
-                self.error = 'Request failed: response code: '+str(r.status_code)
+                self.error = f'Request failed: response code: {str(r.status_code)}'
         except Exception as e:
-            self.error = 'Request failed: '+str(e)
+            self.error = f'Request failed: {str(e)}'
         return response
